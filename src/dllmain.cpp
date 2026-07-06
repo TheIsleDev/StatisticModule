@@ -12,7 +12,7 @@ private:
 	StatisticSystemConfig::StatisticConfig Config;
 
 	int TicksFired{0};
-	static constexpr int PerTicksFired{600};// 120 pre sec, 30 game ticks
+	static constexpr int PerTicksFired{720};// 120 pre sec, 30 game ticks
 
 public:
 	StatisticSystem() : CppUserModBase()
