@@ -12,15 +12,18 @@ private:
 	StatisticSystemConfig::StatisticConfig Config;
 
 	int TicksFired{0};
-	static constexpr int PerTicksFired{720};// 120 pre sec, 30 game ticks
+	static constexpr int PerTicksFired{720};// 120 per sec, 30 game ticks
 
 public:
-	StatisticSystem() : CppUserModBase()
-	{
+	StatisticSystem() : CppUserModBase() {
 		ModName = STR("Statistic");
 		ModVersion = STR("1.0");
 		ModDescription = STR("Hehe");
 		ModAuthors = STR("Shiza");
+	}
+
+	~StatisticSystem() override {
+		StatisticSystemComponent::Destroy();
 	}
 
 	auto on_unreal_init() -> void override {
@@ -37,17 +40,13 @@ public:
 	}
 };
 
-#define KISMET_DEBUGGER_MOD_API __declspec(dllexport)
-extern "C"
-{
-	KISMET_DEBUGGER_MOD_API RC::CppUserModBase* start_mod()
-	{
+#define MOD_API __declspec(dllexport)
+extern "C" {
+	MOD_API RC::CppUserModBase* start_mod() {
 		return new StatisticSystem();
 	}
 
-	KISMET_DEBUGGER_MOD_API void uninstall_mod(RC::CppUserModBase* mod)
-	{
-		StatisticSystemComponent::Destroy();
+	MOD_API void uninstall_mod(RC::CppUserModBase* mod) {
 		delete mod;
 	}
 }
