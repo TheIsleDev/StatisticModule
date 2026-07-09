@@ -22,7 +22,7 @@ namespace StatisticSystemComponent {
 	static ATIGameModeBase* GameMode{};
 
 	static int TicksFired{0};
-	static constexpr int PerTicksFired{100};// how often we save data (every min)
+	static constexpr int PerTicksFired{60};// how often we save data (every min)
 
 // If server wont restart very often, like 20 hours and players would die like every 30 seconds
 // then go for adding unordered_map and use it to store time, delay for clean supposed to be around 20 minutes
@@ -49,6 +49,7 @@ namespace StatisticSystemComponent {
 				continue;
 			}
 
+			// Make it save on their own delay, not global #FUTURE #NOLAZINES
 			if (!TicksFired && !Dinosaur->GetSteamId().IsEmpty()) {
 				FTIPlayerData PlayerData = UTISaveManager::GetCharacterData(Character, false);
 				FString Result = UTISaveManager::PlayerDataToString(PlayerData);
