@@ -42,7 +42,9 @@ namespace StatisticSystemComponent {
 
 			ATIDinosaurBase* Dinosaur = static_cast<ATIDinosaurBase*>(Character);
 			int32 DinoID = Dinosaur->GetID();
-			if (Dinosaur->GetbIsDead() && !DeathList.contains(DinoID)) {
+			if (DeathList.contains(DinoID)) continue;
+
+			if (Dinosaur->GetbIsDead()) {
 				DeathList.insert(DinoID);
 				DataBaseConnector::DinoDied(DinoID);
 				continue;
