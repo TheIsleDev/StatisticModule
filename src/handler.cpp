@@ -42,15 +42,14 @@ namespace StatisticSystemComponent {
 
 			ATIDinosaurBase* Dinosaur = static_cast<ATIDinosaurBase*>(Character);
 			int32 DinoID = Dinosaur->GetID();
-			if (DeathList.contains(DinoID)) continue;
-
 			if (Dinosaur->GetbIsDead()) {
+				if (DeathList.contains(DinoID)) continue;
 				DeathList.insert(DinoID);
 				DataBaseConnector::DinoDied(DinoID);
 				continue;
 			}
 
-			if (!TicksFired && Dinosaur->GetSteamId().IsEmpty()) {
+			if (!TicksFired && !Dinosaur->GetSteamId().IsEmpty()) {
 				FTIPlayerData PlayerData = UTISaveManager::GetCharacterData(Character, false);
 				FString Result = UTISaveManager::PlayerDataToString(PlayerData);
 				FString SteamID = Dinosaur->GetSteamId();
@@ -59,7 +58,6 @@ namespace StatisticSystemComponent {
 
 			Batch.DinoID.push_back(std::to_string(static_cast<int>(DinoID)));
 			Batch.Growth.push_back(std::to_string(Dinosaur->GetGrowth()));
-
 			Batch.Health.push_back(std::to_string(Dinosaur->FGetHealth()));
 			Batch.Stamina.push_back(std::to_string(Dinosaur->FGetStamina()));
 			Batch.Hunger.push_back(std::to_string(Dinosaur->FGetHunger()));
@@ -74,9 +72,7 @@ namespace StatisticSystemComponent {
 		}
 
 		if (++TicksFired > PerTicksFired) TicksFired = 0;
-
 		if (!Batch.Size()) return;
-
 		DataBaseConnector::StoreStatisticBatch(Batch);
 	}
 
