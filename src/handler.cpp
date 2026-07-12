@@ -8,9 +8,8 @@
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/Core/Containers/ContainerAllocationPolicies.hpp>
 
-#include "DBLink/database.cpp"
-#include "DBLink/structures.hpp"
-
+#include <DBLink/database.cpp>
+#include <DBLink/structures.hpp>
 #include <Reflection/_include_custom.hpp>
 
 #include "_structs.hpp"
@@ -79,7 +78,7 @@ namespace StatisticSystemComponent {
 
 	auto Initialize(StatisticSystemConfig::StatisticConfig Config) -> void {
 		if (!DataBaseConnector::Initialize(Config.Database)) {
-			Output::send<LogLevel::Error>(STR("DB connection failed, con string: {}"), to_wstring(Config.Database));
+			RC::Output::send<RC::LogLevel::Error>(STR("DB connection failed, con string: {}"), RC::to_wstring(Config.Database));
 		} else DataBaseConnector::PrepareStatistic();
 
 		DinoClass = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.TIDinosaurBase"));
