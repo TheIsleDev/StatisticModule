@@ -15,7 +15,7 @@ private:
 public:
 	StatisticSystem() : CppUserModBase() {
 		ModName = STR("Statistic");
-		ModVersion = STR("1.0");
+		ModVersion = STR("1.0.1");
 		ModDescription = STR("Hehe");
 		ModAuthors = STR("Shiza");
 	}

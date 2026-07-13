@@ -14,6 +14,8 @@
 
 #include "_structs.hpp"
 
+// Declare local debugging if you want more logging on test run
+//#define LOCAL_DEBUGGING
 namespace StatisticSystemComponent {
 	using namespace RC::Unreal;
 
@@ -77,12 +79,13 @@ namespace StatisticSystemComponent {
 	}
 
 	auto Initialize(StatisticSystemConfig::StatisticConfig Config) -> void {
-		if (!DataBaseConnector::Initialize(Config.Database)) {
-			RC::Output::send<RC::LogLevel::Error>(STR("DB connection failed, con string: {}"), RC::to_wstring(Config.Database));
-		} else DataBaseConnector::PrepareStatistic();
+		if (DataBaseConnector::Initialize(Config.Database)) DataBaseConnector::PrepareStatistic();
+#ifdef LOCAL_DEBUGGING
+		else RC::Output::send<RC::LogLevel::Error>(STR("DB connection failed, con string: {}"), RC::to_wstring(Config.Database));
+#endif
 
 		DinoClass = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.TIDinosaurBase"));
-    }
+	}
 
 	auto Destroy() -> void {
 		DataBaseConnector::Destroy();
