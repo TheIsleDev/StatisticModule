@@ -9,9 +9,6 @@ class StatisticSystem : public RC::CppUserModBase {
 private:
 	StatisticSystemConfig::StatisticConfig Config;
 
-	int TicksFired{0};
-	static constexpr int PerTicksFired{720};// 120 per sec, 30 game ticks
-
 public:
 	StatisticSystem() : CppUserModBase() {
 		ModName = STR("Statistic");
@@ -30,6 +27,8 @@ public:
 		StatisticSystemComponent::Initialize(Config);
 	}
 
+	int TicksFired{0};
+	static constexpr int PerTicksFired{720};// 120 per sec, 30 game ticks
 	auto on_update() -> void override {
 		if (++TicksFired < PerTicksFired) return;
 		TicksFired = 0;

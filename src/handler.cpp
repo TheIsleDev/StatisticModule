@@ -7,6 +7,8 @@
 #include <Unreal/UObjectGlobals.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
 #include <Unreal/Core/Containers/ContainerAllocationPolicies.hpp>
+#include "CoreUObject/UObject/Class.hpp"
+#include "FArchive.hpp"
 
 #include <DBLink/database.cpp>
 #include <DBLink/structures.hpp>
@@ -19,11 +21,19 @@
 namespace StatisticSystemComponent {
 	using namespace RC::Unreal;
 
-	static ATIGameModeBase* GameMode{};
+	ATIGameModeBase* GameMode{};
+	TArray<ATIDinosaurBase*> Dinosaurs{};
 
-	static int TicksFired{0};
+	// Fucking pulley for da shit callback?
+	UObject* CallBackSucker{};
+	DelegateManager BindingManager{};
+	UFunction* FHandleCharacterDeath{};
+
+	UFunction* PlayerRespawned{};
+	std::pair<int, int> PlayerSpawnCallBackIDs{};
+
+	int TicksFired{0};
 	static constexpr int PerTicksFired{60};// how often we save data (every min)
-
 	auto Fire() -> void {
 		if (!GameMode) {// It fires before we have gamemode, need to solve that
 			GameMode = static_cast<ATIGameModeBase*>(UObjectGlobals::FindFirstOf(STR("BP_SurvivalGameMode_C")));
@@ -31,17 +41,8 @@ namespace StatisticSystemComponent {
 		}
 
 		StatisticStructs::StatisticBatch Batch;
-
-		TArray<ATICharacterBase*> ActivePlayers = GameMode->GetAllPlayerCharacters();
-		for (ATICharacterBase* Character : ActivePlayers) {
-			if (!Character || !Character->IsA(ATIDinosaurBase::StaticClass())) continue;
-
-			ATIDinosaurBase* Dinosaur = static_cast<ATIDinosaurBase*>(Character);
-			if (Dinosaur->GetbIsDead()) {
-				DataBaseConnector::SaveDino(Dinosaur, false, true);// Make it later do detour for smth
-				continue;
-			}
-
+		for (ATIDinosaurBase* Dinosaur : Dinosaurs) {
+			RC::Output::send<RC::LogLevel::Verbose>(STR("Fired"));
 			// Make it save on their own delay, not global #FUTURE #NOLAZINES
 			if (!TicksFired && !Dinosaur->GetSteamId().IsEmpty()) {
 				DataBaseConnector::SaveDino(Dinosaur, true, false);
@@ -70,14 +71,72 @@ namespace StatisticSystemComponent {
 		DataBaseConnector::StoreStatisticBatch(Batch);
 	}
 
+	auto HandleCharacterDeath(UObject* Context, FFrame& Stack, void* Result) -> void {
+		RC::Output::send<RC::LogLevel::Verbose>(STR("Noob died"));
+
+		ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
+		Dinosaurs.Remove(Dinosaur);
+		BindingManager.UnBind(Dinosaur->GetOnCharacterDied());
+		DataBaseConnector::SaveDino(Dinosaur, false, true);
+	}
+
+	auto PreCharacterSpawn(UnrealScriptFunctionCallableContext& context, void*) -> void {}
+
+	auto PostCharacterSpawn(UnrealScriptFunctionCallableContext& context, void*) -> void {
+		RC::Output::send<RC::LogLevel::Verbose>(STR("Noob added"));
+
+		APlayerController* Controller = *reinterpret_cast<APlayerController**>(context.TheStack.Locals());
+		APawn* Pawn = Controller->GetPawn();
+		if (!Pawn || !Pawn->IsA(ATIDinosaurBase::StaticClass())) return;
+
+		ATIDinosaurBase* Dinosaur = static_cast<ATIDinosaurBase*>(Pawn);
+		Dinosaurs.Add(Dinosaur);
+		BindingManager.Bind(Dinosaur->GetOnCharacterDied(), CallBackSucker, FHandleCharacterDeath->GetFName());
+		DataBaseConnector::SaveDino(Dinosaur, true, false);
+	}
+
 	auto Initialize(StatisticSystemConfig::StatisticConfig Config) -> void {
 		if (DataBaseConnector::Initialize(Config.Database)) DataBaseConnector::PrepareStatistic();
 #ifdef LOCAL_DEBUGGING
 		else RC::Output::send<RC::LogLevel::Error>(STR("DB connection failed, con string: {}"), RC::to_wstring(Config.Database));
 #endif
+
+
+		PlayerRespawned = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Game/TheIsle/Core/GameModes/BP_SurvivalGameMode.BP_SurvivalGameMode_C:OnPlayerRespawned"));
+		PlayerSpawnCallBackIDs = UObjectGlobals::RegisterHook(PlayerRespawned, &PreCharacterSpawn, &PostCharacterSpawn, nullptr);
+
+		UClass* ObjectClass = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/CoreUObject.Object"));
+		FStaticConstructObjectParameters OParams{ObjectClass};
+		OParams.Name  = FName(STR("ModDelegateProxy"), FNAME_Add);
+		CallBackSucker = UObjectGlobals::StaticConstructObject(OParams);
+
+		UFunction* Signature = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+		UClass* FunctionClass = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/CoreUObject.Function"));
+		FStaticConstructObjectParameters FParams{FunctionClass, ObjectClass};
+		FParams.Name = FName(STR("HandleCharacterDeath"), FNAME_Add);
+		FParams.Template = Signature;
+
+		FHandleCharacterDeath = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+		if (FHandleCharacterDeath) {
+			FHandleCharacterDeath->SetFuncPtr(&HandleCharacterDeath);
+			return;
+		}
+
+		FHandleCharacterDeath = static_cast<UFunction*>(UObjectGlobals::StaticConstructObject(FParams));
+
+		FHandleCharacterDeath->GetNumParms() = Signature->GetNumParms();
+		FHandleCharacterDeath->GetParmsSize() = Signature->GetParmsSize();
+		FHandleCharacterDeath->GetChildProperties() = Signature->GetChildProperties();
+		FHandleCharacterDeath->GetPropertiesSize() = Signature->GetPropertiesSize();
+		FHandleCharacterDeath->GetFunctionFlags() = (Signature->GetFunctionFlags() | FUNC_Native | FUNC_Public) & ~(FUNC_Delegate | FUNC_MulticastDelegate);
+
+		FHandleCharacterDeath->SetFuncPtr(&HandleCharacterDeath);
+		ObjectClass->GetFuncMap().Add(FHandleCharacterDeath->GetFName(), TObjectPtr<UFunction>(FHandleCharacterDeath));
 	}
 
 	auto Destroy() -> void {
 		DataBaseConnector::Destroy();
+		BindingManager.Destroy();
+		UObjectGlobals::UnregisterHook(PlayerRespawned, PlayerSpawnCallBackIDs);
 	}
 }
