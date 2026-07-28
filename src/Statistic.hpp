@@ -4,7 +4,6 @@
 #include <string>
 
 #include <Mod/CppUserModBase.hpp>
-
 #include <Database/Database.hpp>
 
 #include "CallBacks.hpp"
@@ -16,13 +15,14 @@ struct StatisticConfig {
 
 class StatisticSystem : public RC::CppUserModBase {
 private:
-	StatisticConfig Config;
-
+	StatisticConfig Config{};
+	Hook::GlobalCallbackId FireCallBackID{};
 	RC::DataBase::DataBase* Database{};
-	StatisticSubsystem* Statistic{};
-	CallsHandler* Callbacks{};
 
 public:
+	StatisticSubsystem* TickingStatistic{};
+	CallsHandler* Callbacks{};
+
     StatisticSystem();
 	~StatisticSystem() override;
 

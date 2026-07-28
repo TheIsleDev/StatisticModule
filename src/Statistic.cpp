@@ -4,9 +4,12 @@
 
 #include <Helpers/config_reader.hpp>
 
-#include "CallBacks.hpp"
+#include "CallBacks.cpp"
 #include "Statistic.hpp"
-#include "Subsystem.hpp"
+#include "Subsystem.cpp"
+
+
+StatisticSystem* StatisticSystemLookUp{};
 
 StatisticSystem::StatisticSystem() {
 	ModName = STR("Statistic");
@@ -15,24 +18,28 @@ StatisticSystem::StatisticSystem() {
 	ModAuthors = STR("Shiza");
 
 	RC::ConfigLoader::LoadModConfig(&Config);
+
+	StatisticSystemLookUp = this;
 }
 
 StatisticSystem::~StatisticSystem() {
+	Hook::UnregisterCallback(FireCallBackID);
 }
-
-//void TickFired(auto& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
-//}
 
 
 void TickFired(Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
+	StatisticSystemLookUp->TickingStatistic->Tick(DeltaSeconds, bIdleMode);
 }
 
 void StatisticSystem::on_unreal_init() {
-	static RC::DataBase::DataBase Database{Config.Database};
-	static StatisticSubsystem Ticker{&Database};
-	static CallsHandler Calls{&Database, &Statistic};
+	static RC::DataBase::DataBase DatabaseLink{Config.Database};
+	Database = &DatabaseLink;
+	static StatisticSubsystem Ticker{Database};
+	TickingStatistic = &Ticker;
+	static CallsHandler Calls{Database, TickingStatistic};
+	Callbacks = &Calls;
 
-	Unreal::Hook::RegisterEngineTickPreCallback(TickFired, {false, true, STR("StatisticSystem"), STR("InstallHook")});
+	Hook::RegisterEngineTickPreCallback(TickFired, {false, true, STR("StatisticSystem"), STR("TickingStatistic")});
 }
 
 

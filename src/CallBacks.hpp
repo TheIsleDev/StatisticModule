@@ -16,8 +16,8 @@ private:
 	UFunction* FHandleCharacterDied{};
 	UFunction* FHandleActorDestroyed{};
 
-	UFunction* FOnPlayerRespawned{};
-	std::pair<int, int> FOnPlayerRespawnedIDs{};
+	UFunction* OnPlayerRespawned{};
+	std::pair<int, int> OnPlayerRespawnedIDs{};
 
 	StatisticSubsystem* Ticker{};
 	RC::DataBase::DataBase* Database{};
@@ -27,10 +27,10 @@ public:
 	~CallsHandler();
 
 	// Кастомные функции для UEшки
-	void HandleActorDestroyed(UObject* Context, FFrame& Stack, void* Result);
-	void HandleCharacterDied(UObject* Context, FFrame& Stack, void* Result);
+	void HandleActorDestroyed(UObject* Context, FFrame& Stack);
+	void HandleCharacterDied(UObject* Context, FFrame& Stack);
 
 	// Вызывается на контроллере когда он получает actor под контроль, почему так? хз.
-	void PreCharacterSpawn(UnrealScriptFunctionCallableContext& context, void*);
-	void PostCharacterSpawn(UnrealScriptFunctionCallableContext& context, void*);
+	void PreCharacterSpawn(UnrealScriptFunctionCallableContext& context);
+	void PostCharacterSpawn(UnrealScriptFunctionCallableContext& context);
 };
