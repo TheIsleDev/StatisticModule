@@ -2,7 +2,7 @@ set(TARGET Statistic)
 project(${TARGET})
 
 add_library(${TARGET} SHARED
-    src/dllmain.cpp
+    src/Statistic.cpp
 )
 
 target_link_libraries(${TARGET} PUBLIC EvrimaCommon)

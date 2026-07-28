@@ -15,10 +15,6 @@
 #include <DBLink/structures.hpp>
 #include <Reflection/_include_custom.hpp>
 
-#include "_structs.hpp"
-
-// Declare local debugging if you want more logging on test run
-//#define LOCAL_DEBUGGING
 namespace StatisticSystemComponent {
 	using namespace RC::Unreal;
 
@@ -34,47 +30,12 @@ namespace StatisticSystemComponent {
 	UFunction* FOnPlayerRespawned{};
 	std::pair<int, int> FOnPlayerRespawnedIDs{};
 
-
-	auto Fire() -> void {
-		if (!GameMode) {// It fires before we have gamemode, need to solve that
-			GameMode = static_cast<ATIGameModeBase*>(UObjectGlobals::FindFirstOf(STR("BP_SurvivalGameMode_C")));
-			if(!GameMode) return;
-		}
-
-		RC::Output::send<RC::LogLevel::Verbose>(STR("Noobs num: {}"), Dinosaurs.Num());
-
-		StatisticStructs::StatisticBatch Batch;
-		for (ATIDinosaurBase* Dinosaur : Dinosaurs) {
-			Batch.SteamID.push_back(RC::to_string(*Dinosaur->GetSteamId()));
-			Batch.Class.push_back(RC::to_string(Dinosaur->GetClassPrivate()->GetPathName()));
-			Batch.DinoID.push_back(std::to_string(Dinosaur->GetID()));
-
-			Batch.Growth.push_back(std::to_string(Dinosaur->GetGrowth()));
-			Batch.Health.push_back(std::to_string(Dinosaur->FGetHealth()));
-			Batch.Stamina.push_back(std::to_string(Dinosaur->FGetStamina()));
-			Batch.Hunger.push_back(std::to_string(Dinosaur->FGetHunger()));
-			Batch.Thirst.push_back(std::to_string(Dinosaur->FGetThirst()));
-			Batch.Oxygen.push_back(std::to_string(Dinosaur->FGetOxygen()));
-			Batch.Blood.push_back(std::to_string(Dinosaur->FGetBlood()));
-
-			FVector PlayerVector = Dinosaur->K2_GetActorLocation();
-			Batch.X.push_back(std::to_string(PlayerVector.X()));
-			Batch.Y.push_back(std::to_string(PlayerVector.Y()));
-			Batch.Z.push_back(std::to_string(PlayerVector.Z()));
-		}
-
-		if (!Batch.Size()) return;
-		DataBaseConnector::StoreStatisticBatch(Batch);
-	}
-
-
 	// Наша кастомная функция, для игры это поинтер на память в библиотеку
 	auto HandleActorDestroyed(UObject* Context, FFrame& Stack, void* Result) -> void {
 		RC::Output::send<RC::LogLevel::Verbose>(STR("Noob destroyed"));
 		ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 		Dinosaurs.Remove(Dinosaur);
-		BindingManager.UnBind(Dinosaur->GetOnCharacterDied());
-		BindingManager.UnBind(Dinosaur->GetOnDestroyed());
+		BindingManager.UnBindContainer(Dinosaur);
 	}
 
 
@@ -83,8 +44,7 @@ namespace StatisticSystemComponent {
 		RC::Output::send<RC::LogLevel::Verbose>(STR("Noob died"));
 		ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 		Dinosaurs.Remove(Dinosaur);
-		BindingManager.UnBind(Dinosaur->GetOnCharacterDied());
-		BindingManager.UnBind(Dinosaur->GetOnDestroyed());
+		BindingManager.UnBindContainer(Dinosaur);
 		DataBaseConnector::SaveDino(Dinosaur, false, true);
 	}
 
@@ -101,8 +61,17 @@ namespace StatisticSystemComponent {
 		if (Dinosaurs.Contains(Dinosaur)) return;// Режим спектатора тоже тригерит это, как и перезаход после hard выхода с сервера
 
 		Dinosaurs.Add(Dinosaur);
-		BindingManager.Bind(Dinosaur->GetOnCharacterDied(), CallBackSucker, FHandleCharacterDied->GetFName());
-		BindingManager.Bind(Dinosaur->GetOnDestroyed(), CallBackSucker, FHandleActorDestroyed->GetFName());
+
+		// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю.
+		BindingManager.Bind(
+			static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find))),
+			static_cast<void*>(Dinosaur->GetOnCharacterDied()),
+			Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName());
+
+		BindingManager.Bind(
+			static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find))),
+			static_cast<void*>(Dinosaur->GetOnDestroyed()),
+			Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName());
 	}
 
 
@@ -201,11 +170,9 @@ namespace StatisticSystemComponent {
 		UCustom->GetFuncMap().Add(FHandleActorDestroyed->GetFName(), TObjectPtr<UFunction>(FHandleActorDestroyed));
 	}
 
-	auto Initialize(StatisticSystemConfig::StatisticConfig Config) -> void {
+	auto Initialize(StatisticConfig Config) -> void {
 		if (DataBaseConnector::Initialize(Config.Database)) DataBaseConnector::PrepareStatistic();
-#ifdef LOCAL_DEBUGGING
-		else RC::Output::send<RC::LogLevel::Error>(STR("DB connection failed, con string: {}"), RC::to_wstring(Config.Database));
-#endif
+		else LOG_DEBUG(STR("DB connection failed, con string: {}"), RC::to_wstring(Config.Database));
 
 		FOnPlayerRespawned = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Game/TheIsle/Core/GameModes/BP_SurvivalGameMode.BP_SurvivalGameMode_C:OnPlayerRespawned"));
 		FOnPlayerRespawnedIDs = UObjectGlobals::RegisterHook(FOnPlayerRespawned, &PreCharacterSpawn, &PostCharacterSpawn, nullptr);
@@ -217,6 +184,9 @@ namespace StatisticSystemComponent {
 		UClass* UCustom = GenerateClass(FoundPackage);
 		GenerateFunction1(UCustom);
 		GenerateFunction2(UCustom);
+
+		CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
+		if (CallBackSucker) return;
 
 		// Создаем наш объект
 		FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
