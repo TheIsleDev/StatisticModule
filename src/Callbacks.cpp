@@ -3,11 +3,11 @@
 #include <Unreal/UPackage.hpp>
 #include <Unreal/UObjectGlobals.hpp>
 #include <Unreal/CoreUObject/UObject/UnrealType.hpp>
+#include <Unreal/CoreUObject/UObject/Class.hpp>
+#include <String/StringType.hpp>
 #include <TheIsle/APlayerController.hpp>
 
-#include "CallBacks.hpp"
-#include "CoreUObject/UObject/Class.hpp"
-#include "String/StringType.hpp"
+#include "Callbacks.hpp"
 
 
 UClass* CopyClass(UPackage* Package) {

@@ -2,11 +2,9 @@
 // Declare local debugging if you want more logging on test run
 //#define LOCAL_DEBUGGING
 
-#include <Helpers/config_reader.hpp>
+#include <TheIsleHelpers/ConfigReader.hpp>
 
-#include "CallBacks.cpp"
 #include "Statistic.hpp"
-#include "Subsystem.cpp"
 
 
 StatisticSystem* StatisticSystemLookUp{};
@@ -24,6 +22,7 @@ StatisticSystem::StatisticSystem() {
 
 StatisticSystem::~StatisticSystem() {
 	Hook::UnregisterCallback(FireCallBackID);
+	StatisticSystemLookUp = nullptr;
 }
 
 
