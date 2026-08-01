@@ -3,8 +3,7 @@
 //#define LOCAL_DEBUGGING
 
 #include <TheIsleHelpers/ConfigReader.hpp>
-
-#include "Statistic.hpp"
+#include <Statistic.hpp>
 
 
 StatisticSystem::StatisticSystem() {
@@ -18,6 +17,7 @@ StatisticSystem::StatisticSystem() {
 
 StatisticSystem::~StatisticSystem() {
 }
+
 
 void StatisticSystem::on_unreal_init() {
 	static RC::DataBase::DataBase DatabaseLink{Config.Database};

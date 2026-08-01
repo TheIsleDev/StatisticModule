@@ -2,12 +2,10 @@
 #pragma once
 
 #include <string>
-
 #include <Mod/CppUserModBase.hpp>
 #include <Database/Database.hpp>
-
-#include "Callbacks.hpp"
-#include "Subsystem.hpp"
+#include <Callbacks.hpp>
+#include <Subsystem.hpp>
 
 
 struct StatisticConfig {

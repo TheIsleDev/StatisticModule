@@ -1,8 +1,7 @@
 
 #include <DynamicOutput/Output.hpp>
 #include <DynamicOutput/OutputDevice.hpp>
-
-#include "Subsystem.hpp"
+#include <Subsystem.hpp>
 
 
 StatisticSubsystem::StatisticSubsystem(RC::DataBase::DataBase* DBLink) {
