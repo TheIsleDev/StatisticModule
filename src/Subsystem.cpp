@@ -7,16 +7,29 @@
 
 StatisticSubsystem::StatisticSubsystem(RC::DataBase::DataBase* DBLink) {
 	Database = DBLink;
+
+	// Мы хотим что бы эта хуйня тикала только когда игра тикает, и не на оборот...
+	FireCallBackID = Hook::RegisterEngineTickPreCallback(
+		[this](Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
+			Tick(DeltaSeconds, bIdleMode);
+		}
+		, {false, true, STR("StatisticSystem"), STR("TickingStatistic")}
+	);
 }
 
 StatisticSubsystem::~StatisticSubsystem() {
+	Hook::UnregisterCallback(FireCallBackID);
 }
 
 
 void StatisticSubsystem::Tick(float DeltaSeconds, bool bIdleMode) {
 	RC::Output::send<RC::LogLevel::Verbose>(STR("Noobs num: {}"), Dinosaurs.Num());
 
+	// Нахуя тикать если ничего не изменилось?
 	if (bIdleMode) return;
+
+	// Ну тоже как бы нахуя
+	if (!Dinosaurs.Num()) return;
 
 	if (++TicksFired < TickRate) return;
 	TicksFired = 0;

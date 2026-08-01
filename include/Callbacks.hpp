@@ -26,6 +26,9 @@ public:
     CallsHandler(RC::DataBase::DataBase* Database, StatisticSubsystem* Ticker);
 	~CallsHandler();
 
+	// Калбэк инициализации к моменту создания BP хуйни.
+	void CreateHelpers();
+
 	// Кастомные функции для UEшки
 	void HandleActorDestroyed(UObject* Context, FFrame& Stack);
 	void HandleCharacterDied(UObject* Context, FFrame& Stack);

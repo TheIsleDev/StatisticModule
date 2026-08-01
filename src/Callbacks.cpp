@@ -73,12 +73,33 @@ UFunction* CopyFunction(UClass* UCustom, RC::StringType Name, RC::StringType Tar
 
 CallsHandler* LookUp{};
 
+// Ересь с калбэками
 void ActorDestroyedCollector(UObject* Context, FFrame& Stack, void* Result) {
 	LookUp->HandleActorDestroyed(Context, Stack);
 }
 
 void CharacterDiedCollector(UObject* Context, FFrame& Stack, void* Result) {
 	LookUp->HandleCharacterDied(Context, Stack);
+}
+
+
+void CallsHandler::CreateHelpers() {
+	// Я ебал рот, его крашит если пытаться самому лукапить пакет ебаный, ну будут через прокси искать, хули мне
+	UClass* PackageSource = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.ActorPoolManager"));
+	UPackage* FoundPackage = static_cast<UPackage*>(PackageSource->GetOutermost());
+
+	UClass* UCustom = CopyClass(FoundPackage);
+	FHandleCharacterDied = CopyFunction(UCustom, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+	FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
+	FHandleActorDestroyed = CopyFunction(UCustom, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
+	FHandleActorDestroyed->SetFuncPtr(&ActorDestroyedCollector);
+
+	// Нет смысла делать safechecks тут, похуй лучше краш чем хуй пойми что
+	CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
+
+	FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
+	UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
+	CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
 }
 
 CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* TickerLink) {
@@ -97,22 +118,13 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 		}, nullptr
 	);
 
-	// Я ебал рот, его крашит если пытаться самому лукапить пакет ебаный, ну будут через прокси искать, хули мне
-	UClass* PackageSource = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.ActorPoolManager"));
-	UPackage* FoundPackage = static_cast<UPackage*>(PackageSource->GetOutermost());
-
-	UClass* UCustom = CopyClass(FoundPackage);
-	FHandleCharacterDied = CopyFunction(UCustom, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
-	FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
-	FHandleActorDestroyed = CopyFunction(UCustom, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
-	FHandleActorDestroyed->SetFuncPtr(&ActorDestroyedCollector);
-
-	// Нет смысла делать safechecks тут, похуй лучше краш чем хуй пойми что
-	CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
-
-	FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
-	UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
-	CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
+	// Ну хз даже как засейвится до генерации BP...
+	Hook::RegisterEngineTickPreCallback(
+		[this](Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
+			CreateHelpers();
+		}
+		, {true, true, STR("Callbacks"), STR("Initialization")}
+	);
 }
 
 CallsHandler::~CallsHandler() {
@@ -150,14 +162,17 @@ void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& conte
 
 	Ticker->Dinosaurs.Add(Dinosaur);
 
-	// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю.
+	// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю
 	BindingManager.Bind(
 		static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find))),
 		static_cast<void*>(Dinosaur->OnCharacterDied()),
-		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName());
+		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
+	);
 
-	BindingManager.Bind(
+	// Ересь с регистрацией хуеты что имеет глобальное хранилище, я ебал его в рот...
+	BindingManager.CheckAndBind(
 		static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find))),
 		static_cast<void*>(Dinosaur->OnDestroyed()),
-		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName());
+		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
+	);
 }

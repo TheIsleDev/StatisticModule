@@ -7,8 +7,6 @@
 #include "Statistic.hpp"
 
 
-StatisticSystem* StatisticSystemLookUp{};
-
 StatisticSystem::StatisticSystem() {
 	ModName = STR("Statistic");
 	ModVersion = STR("1.0.2");
@@ -16,18 +14,9 @@ StatisticSystem::StatisticSystem() {
 	ModAuthors = STR("Shiza");
 
 	RC::ConfigLoader::LoadModConfig(&Config);
-
-	StatisticSystemLookUp = this;
 }
 
 StatisticSystem::~StatisticSystem() {
-	Hook::UnregisterCallback(FireCallBackID);
-	StatisticSystemLookUp = nullptr;
-}
-
-
-void TickFired(Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
-	StatisticSystemLookUp->TickingStatistic->Tick(DeltaSeconds, bIdleMode);
 }
 
 void StatisticSystem::on_unreal_init() {
@@ -37,8 +26,6 @@ void StatisticSystem::on_unreal_init() {
 	TickingStatistic = &Ticker;
 	static CallsHandler Calls{Database, TickingStatistic};
 	Callbacks = &Calls;
-
-	Hook::RegisterEngineTickPreCallback(TickFired, {false, true, STR("StatisticSystem"), STR("TickingStatistic")});
 }
 
 

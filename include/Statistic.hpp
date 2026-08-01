@@ -6,8 +6,9 @@
 #include <Mod/CppUserModBase.hpp>
 #include <Database/Database.hpp>
 
-#include "CallBacks.hpp"
+#include "Callbacks.hpp"
 #include "Subsystem.hpp"
+
 
 struct StatisticConfig {
 	std::string Database;
@@ -16,7 +17,6 @@ struct StatisticConfig {
 class StatisticSystem : public RC::CppUserModBase {
 private:
 	StatisticConfig Config{};
-	Hook::GlobalCallbackId FireCallBackID{};
 	RC::DataBase::DataBase* Database{};
 
 public:

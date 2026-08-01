@@ -16,6 +16,7 @@ private:
 
 	/// Array with active dinosaurs for data gathering
 	RC::DataBase::DataBase* Database{};
+	Hook::GlobalCallbackId FireCallBackID{};
 
 public:
 	TArray<ATIDinosaurBase*> Dinosaurs{};
