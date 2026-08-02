@@ -85,6 +85,12 @@ void CharacterDiedCollector(UObject* Context, FFrame& Stack, void* Result) {
 
 
 bool CallsHandler::CreateHelpers() {
+	static int TicksFired = 0;
+	static constexpr int TickRate{300};
+
+	if (++TicksFired < TickRate) return false;
+	TicksFired = 0;
+
 	if (!OnPlayerRespawned) {
 		OnPlayerRespawned = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Game/TheIsle/Core/GameModes/BP_SurvivalGameMode.BP_SurvivalGameMode_C:OnPlayerRespawned"));
 		if (!OnPlayerRespawned) return false;
@@ -109,22 +115,29 @@ bool CallsHandler::CreateHelpers() {
 	UClass* UCustom = CopyClass(FoundPackage);
 	if (!UCustom) return false;
 
-	FHandleCharacterDied = CopyFunction(UCustom, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
-	if (!FHandleCharacterDied) return false;
-	FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
+	if (!FHandleCharacterDied) {
+		FHandleCharacterDied = CopyFunction(UCustom, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+		if (!FHandleCharacterDied) return false;
+		FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
+	}
 
-	FHandleActorDestroyed = CopyFunction(UCustom, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
-	if (!FHandleActorDestroyed) return false;
-	FHandleActorDestroyed->SetFuncPtr(&ActorDestroyedCollector);
+	if (!FHandleActorDestroyed) {
+		FHandleActorDestroyed = CopyFunction(UCustom, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
+		if (!FHandleActorDestroyed) return false;
+		FHandleActorDestroyed->SetFuncPtr(&ActorDestroyedCollector);
+	}
 
 	// Нет смысла делать safechecks тут, похуй лучше краш чем хуй пойми что
-	CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
-	if (CallBackSucker) return true;
+	if (!CallBackSucker) {
+		CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
+		if (!CallBackSucker) {
+			FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
+			UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
+			CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
+			if (!CallBackSucker) return false;
+		}
+	}
 
-	FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
-	UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
-	CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
-	if (!CallBackSucker) return false;
 	return true;
 }
 
@@ -135,11 +148,11 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 	LookUp = this;
 
 	// Ну хз даже как засейвится до генерации BP...
-	InitializeCallBackID = Hook::RegisterEngineTickPreCallback(
+	Hook::RegisterEngineTickPreCallback(
 		[this](Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
 			if (!CreateHelpers()) return;
 
-			Hook::UnregisterCallback(InitializeCallBackID);
+			info.RemoveSelf();
 		}
 		, {false, true, STR("Statistic"), STR("CallbacksInitialize")}
 	);
@@ -194,9 +207,9 @@ void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& conte
 	);
 
 	// Ересь с регистрацией хуеты что имеет глобальное хранилище, я ебал его в рот...
-	FMulticastDelegateProperty* POnDestroyed = static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
-	BindingManager.Bind(
-		POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
-		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
-	);
+	// FMulticastDelegateProperty* POnDestroyed = static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
+	// BindingManager.Bind(
+	// 	POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
+	// 	Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
+	// );
 }
