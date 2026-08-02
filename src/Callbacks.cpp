@@ -1,4 +1,5 @@
 
+#include "Hooks/Hooks.hpp"
 #include <Unreal/UObject.hpp>
 #include <Unreal/UPackage.hpp>
 #include <Unreal/UObjectGlobals.hpp>
@@ -7,6 +8,7 @@
 #include <String/StringType.hpp>
 #include <TheIsle/APlayerController.hpp>
 #include <Callbacks.hpp>
+#define LOCAL_DEBUGGING
 
 
 UClass* CopyClass(UPackage* Package) {
@@ -82,23 +84,48 @@ void CharacterDiedCollector(UObject* Context, FFrame& Stack, void* Result) {
 }
 
 
-void CallsHandler::CreateHelpers() {
+bool CallsHandler::CreateHelpers() {
+	if (!OnPlayerRespawned) {
+		OnPlayerRespawned = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Game/TheIsle/Core/GameModes/BP_SurvivalGameMode.BP_SurvivalGameMode_C:OnPlayerRespawned"));
+		if (!OnPlayerRespawned) return false;
+
+		OnPlayerRespawnedIDs = UObjectGlobals::RegisterHook(OnPlayerRespawned,
+			[this](UnrealScriptFunctionCallableContext& Context, void* CustomData) {
+				PreCharacterSpawn(Context);
+			},
+			[this](UnrealScriptFunctionCallableContext& Context, void* CustomData) {
+				PostCharacterSpawn(Context);
+			}, nullptr
+		);
+	}
+
 	// Я ебал рот, его крашит если пытаться самому лукапить пакет ебаный, ну будут через прокси искать, хули мне
 	UClass* PackageSource = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.ActorPoolManager"));
+	if (!PackageSource) return false;
+
 	UPackage* FoundPackage = static_cast<UPackage*>(PackageSource->GetOutermost());
+	if (!FoundPackage) return false;
 
 	UClass* UCustom = CopyClass(FoundPackage);
+	if (!UCustom) return false;
+
 	FHandleCharacterDied = CopyFunction(UCustom, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+	if (!FHandleCharacterDied) return false;
 	FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
+
 	FHandleActorDestroyed = CopyFunction(UCustom, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
+	if (!FHandleActorDestroyed) return false;
 	FHandleActorDestroyed->SetFuncPtr(&ActorDestroyedCollector);
 
 	// Нет смысла делать safechecks тут, похуй лучше краш чем хуй пойми что
 	CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
+	if (CallBackSucker) return true;
 
 	FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
 	UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
 	CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
+	if (!CallBackSucker) return false;
+	return true;
 }
 
 CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* TickerLink) {
@@ -107,22 +134,14 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 
 	LookUp = this;
 
-	OnPlayerRespawned = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Game/TheIsle/Core/GameModes/BP_SurvivalGameMode.BP_SurvivalGameMode_C:OnPlayerRespawned"));
-	OnPlayerRespawnedIDs = UObjectGlobals::RegisterHook(OnPlayerRespawned,
-		[this](UnrealScriptFunctionCallableContext& Context, void* CustomData) {
-			PreCharacterSpawn(Context);
-		},
-		[this](UnrealScriptFunctionCallableContext& Context, void* CustomData) {
-			PostCharacterSpawn(Context);
-		}, nullptr
-	);
-
 	// Ну хз даже как засейвится до генерации BP...
-	Hook::RegisterEngineTickPreCallback(
+	InitializeCallBackID = Hook::RegisterEngineTickPreCallback(
 		[this](Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
-			CreateHelpers();
+			if (!CreateHelpers()) return;
+
+			Hook::UnregisterCallback(InitializeCallBackID);
 		}
-		, {true, true, STR("Callbacks"), STR("Initialization")}
+		, {false, true, STR("Statistic"), STR("CallbacksInitialize")}
 	);
 }
 
@@ -133,14 +152,18 @@ CallsHandler::~CallsHandler() {
 
 
 void CallsHandler::HandleActorDestroyed(UObject* Context, FFrame& Stack) {
+#ifdef LOCAL_DEBUGGING
 	RC::Output::send<RC::LogLevel::Verbose>(STR("Noob destroyed"));
+#endif
 	ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 	Ticker->Dinosaurs.Remove(Dinosaur);
 	BindingManager.UnBindContainer(Dinosaur);
 }
 
 void CallsHandler::HandleCharacterDied(UObject* Context, FFrame& Stack) {
+#ifdef LOCAL_DEBUGGING
 	RC::Output::send<RC::LogLevel::Verbose>(STR("Noob died"));
+#endif
 	ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 	Ticker->Dinosaurs.Remove(Dinosaur);
 	BindingManager.UnBindContainer(Dinosaur);
@@ -151,7 +174,9 @@ void CallsHandler::HandleCharacterDied(UObject* Context, FFrame& Stack) {
 void CallsHandler::PreCharacterSpawn(UnrealScriptFunctionCallableContext& context) {}
 
 void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& context) {
+#ifdef LOCAL_DEBUGGING
 	RC::Output::send<RC::LogLevel::Verbose>(STR("Noob spawned"));
+#endif
 	APlayerController* Controller = *reinterpret_cast<APlayerController**>(context.TheStack.Locals());
 	APawn* Pawn = Controller->Pawn();
 	if (!Pawn || !Pawn->IsA(ATIDinosaurBase::StaticClass())) return;
@@ -162,16 +187,16 @@ void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& conte
 	Ticker->Dinosaurs.Add(Dinosaur);
 
 	// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю
+	FMulticastDelegateProperty* POnCharacterDied = static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find)));
 	BindingManager.Bind(
-		static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find))),
-		static_cast<void*>(Dinosaur->OnCharacterDied()),
+		POnCharacterDied, POnCharacterDied->ContainerPtrToValuePtr<void>(Dinosaur),
 		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
 	);
 
 	// Ересь с регистрацией хуеты что имеет глобальное хранилище, я ебал его в рот...
-	BindingManager.CheckAndBind(
-		static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find))),
-		static_cast<void*>(Dinosaur->OnDestroyed()),
+	FMulticastDelegateProperty* POnDestroyed = static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
+	BindingManager.Bind(
+		POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
 		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
 	);
 }

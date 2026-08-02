@@ -21,6 +21,7 @@ StatisticSystem::~StatisticSystem() {
 
 void StatisticSystem::on_unreal_init() {
 	static RC::DataBase::DataBase DatabaseLink{Config.Database};
+	DatabaseLink.PrepareStatistic();
 	Database = &DatabaseLink;
 	static StatisticSubsystem Ticker{Database};
 	TickingStatistic = &Ticker;

@@ -21,12 +21,14 @@ private:
 	StatisticSubsystem* Ticker{};
 	RC::DataBase::DataBase* Database{};
 
+	Hook::GlobalCallbackId InitializeCallBackID{};
+
 public:
     CallsHandler(RC::DataBase::DataBase* Database, StatisticSubsystem* Ticker);
 	~CallsHandler();
 
 	// Калбэк инициализации к моменту создания BP хуйни.
-	void CreateHelpers();
+	bool CreateHelpers();
 
 	// Кастомные функции для UEшки
 	void HandleActorDestroyed(UObject* Context, FFrame& Stack);

@@ -12,7 +12,7 @@ class StatisticSubsystem {
 private:
 	/// How often it fires
 	int TicksFired = 0;
-	static constexpr int TickRate{10};
+	static constexpr int TickRate{30};
 
 	/// Array with active dinosaurs for data gathering
 	RC::DataBase::DataBase* Database{};

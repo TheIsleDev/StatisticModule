@@ -2,6 +2,7 @@
 #include <DynamicOutput/Output.hpp>
 #include <DynamicOutput/OutputDevice.hpp>
 #include <Subsystem.hpp>
+#define LOCAL_DEBUGGING
 
 
 StatisticSubsystem::StatisticSubsystem(RC::DataBase::DataBase* DBLink) {
@@ -12,7 +13,7 @@ StatisticSubsystem::StatisticSubsystem(RC::DataBase::DataBase* DBLink) {
 		[this](Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
 			Tick(DeltaSeconds, bIdleMode);
 		}
-		, {false, true, STR("StatisticSystem"), STR("TickingStatistic")}
+		, {false, true, STR("Statistic"), STR("TickingStatistic")}
 	);
 }
 
@@ -22,8 +23,6 @@ StatisticSubsystem::~StatisticSubsystem() {
 
 
 void StatisticSubsystem::Tick(float DeltaSeconds, bool bIdleMode) {
-	RC::Output::send<RC::LogLevel::Verbose>(STR("Noobs num: {}"), Dinosaurs.Num());
-
 	// Нахуя тикать если ничего не изменилось?
 	if (bIdleMode) return;
 
@@ -32,6 +31,10 @@ void StatisticSubsystem::Tick(float DeltaSeconds, bool bIdleMode) {
 
 	if (++TicksFired < TickRate) return;
 	TicksFired = 0;
+
+#ifdef LOCAL_DEBUGGING
+	RC::Output::send<RC::LogLevel::Verbose>(STR("Noobs num: {}"), Dinosaurs.Num());
+#endif
 
 	RC::DataBase::StatisticBatch Batch;
 	for (ATIDinosaurBase* Dinosaur : Dinosaurs) {
