@@ -24,7 +24,7 @@ UClass* CopyClass(UPackage* Package, const RC::StringType ClassName) {
 	// В кастомном модлоадере я смогу обращаться проще к другой функции да и там схема будет немного другой, по этому не думаю что стоит тратить на это время щас
 	FStaticConstructObjectParameters UClassParams{UClass::StaticClass(), Package};
 	UClassParams.Name = FName(ClassName, FNAME_Add);
-	UClassParams.SetFlags = static_cast<EObjectFlags>(UObject::StaticClass()->GetObjectFlags() | RF_MarkAsNative | RF_MarkAsRootSet);
+	UClassParams.SetFlags = static_cast<EObjectFlags>(UObject::StaticClass()->GetObjectFlags() | RF_MarkAsNative | RF_MarkAsRootSet);// Спасает от GC
 	UClassParams.Template = UObject::StaticClass();// Копируем основу
 
 	// Регестрирует наш чертов класс
@@ -119,6 +119,7 @@ bool CallsHandler::CreateHelpers() {
 		CustomClass = CopyClass(FoundPackage, ClassName);
 		if (!CustomClass) return false;
 	}
+	// Слишком "late", флаги что ставятся на создании только спасают от GC, я хуй знает почему
 	FUObjectItem* ClassInternalItem = CustomClass->GetObjectItem();
 	ClassInternalItem->SetGCKeep();
 	ClassInternalItem->SetRootSet();
@@ -139,11 +140,12 @@ bool CallsHandler::CreateHelpers() {
 		CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
 		if (!CallBackSucker) {
 			FStaticConstructObjectParameters UObjectParams{CustomClass, FoundPackage};
-			UObjectParams.SetFlags = RF_MarkAsRootSet;
+			UObjectParams.SetFlags = RF_MarkAsRootSet;// Спасает от GC
 			UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
 			CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
 			if (!CallBackSucker) return false;
 		}
+		// Слишком "late", флаги что ставятся на создании только спасают от GC, я догадываюсь почему... кто-то слишком дохуя тыкал GC.
 		FUObjectItem* InternalItem = CallBackSucker->GetObjectItem();
 		InternalItem->SetGCKeep();
 		InternalItem->SetRootSet();
