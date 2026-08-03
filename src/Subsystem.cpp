@@ -33,7 +33,7 @@ void StatisticSubsystem::Tick(float DeltaSeconds, bool bIdleMode) {
 	TicksFired = 0;
 
 #ifdef LOCAL_DEBUGGING
-	RC::Output::send<RC::LogLevel::Verbose>(STR("Noobs num: {}"), Dinosaurs.Num());
+	RC::Output::send<RC::LogLevel::Verbose>(STR("Fired, dinos num: {}"), Dinosaurs.Num());
 #endif
 
 	RC::DataBase::StatisticBatch Batch;

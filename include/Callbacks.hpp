@@ -10,19 +10,19 @@ using namespace RC::Unreal::TheIsle;
 
 class CallsHandler {
 private:
+	UClass* CustomClass{};
 	UObject* CallBackSucker{};
 	DelegateManager BindingManager{};
 	UFunction* FHandleCharacterDied{};
 	UFunction* FHandleActorDestroyed{};
 
+	// Калбэк инициализации к моменту создания BP хуйни.
+	bool CreateHelpers();
 	UFunction* OnPlayerRespawned{};
 	std::pair<int, int> OnPlayerRespawnedIDs{};
 
 	StatisticSubsystem* Ticker{};
 	RC::DataBase::DataBase* Database{};
-
-	// Калбэк инициализации к моменту создания BP хуйни.
-	bool CreateHelpers();
 
 public:
     CallsHandler(RC::DataBase::DataBase* Database, StatisticSubsystem* Ticker);

@@ -8,12 +8,13 @@
 #include <String/StringType.hpp>
 #include <TheIsle/APlayerController.hpp>
 #include <Callbacks.hpp>
+#include <cstddef>
 #define LOCAL_DEBUGGING
 
 
-UClass* CopyClass(UPackage* Package) {
+UClass* CopyClass(UPackage* Package, const RC::StringType ClassName) {
 	// Санити чек)))
-	UClass* UCustom = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.ModClassProxy"));
+	UClass* UCustom = UObjectGlobals::StaticFindObject<UClass*>(nullptr, nullptr, STR("/Script/TheIsle.") + ClassName);
 	if (UCustom) {
 		return UCustom;
 	}
@@ -22,8 +23,8 @@ UClass* CopyClass(UPackage* Package) {
 	// TODO: Перенести это все в кастомный модуль что упростит работу, хотя хз что будет быстрее, кастомный мод лоадер или это
 	// В кастомном модлоадере я смогу обращаться проще к другой функции да и там схема будет немного другой, по этому не думаю что стоит тратить на это время щас
 	FStaticConstructObjectParameters UClassParams{UClass::StaticClass(), Package};
-	UClassParams.Name = FName(STR("ModClassProxy"), FNAME_Add);
-	UClassParams.SetFlags = UObject::StaticClass()->GetObjectFlags();
+	UClassParams.Name = FName(ClassName, FNAME_Add);
+	UClassParams.SetFlags = static_cast<EObjectFlags>(UObject::StaticClass()->GetObjectFlags() | RF_MarkAsNative | RF_MarkAsRootSet);
 	UClassParams.Template = UObject::StaticClass();// Копируем основу
 
 	// Регестрирует наш чертов класс
@@ -38,9 +39,9 @@ UClass* CopyClass(UPackage* Package) {
 	return UCustom;
 }
 
-UFunction* CopyFunction(UClass* UCustom, RC::StringType Name, RC::StringType TargetPath) {
+UFunction* CopyFunction(UClass* UCustom, const RC::StringType ClassName, const RC::StringType Name, const RC::StringType TargetPath) {
 	// Если вдруг мы уже имеем регнутую, иначе может крашнуть...
-	UFunction* CreatedFunction = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Script/TheIsle.ModClassProxy:") + Name);
+	UFunction* CreatedFunction = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Script/TheIsle.") + ClassName + STR(":") + Name);
 	if (CreatedFunction) {
 		return CreatedFunction;
 	}
@@ -91,6 +92,8 @@ bool CallsHandler::CreateHelpers() {
 	if (++TicksFired < TickRate) return false;
 	TicksFired = 0;
 
+	static const RC::StringType ClassName = STR("ModClassProxy");
+
 	if (!OnPlayerRespawned) {
 		OnPlayerRespawned = UObjectGlobals::StaticFindObject<UFunction*>(nullptr, nullptr, STR("/Game/TheIsle/Core/GameModes/BP_SurvivalGameMode.BP_SurvivalGameMode_C:OnPlayerRespawned"));
 		if (!OnPlayerRespawned) return false;
@@ -112,30 +115,38 @@ bool CallsHandler::CreateHelpers() {
 	UPackage* FoundPackage = static_cast<UPackage*>(PackageSource->GetOutermost());
 	if (!FoundPackage) return false;
 
-	UClass* UCustom = CopyClass(FoundPackage);
-	if (!UCustom) return false;
+	if (!CustomClass) {
+		CustomClass = CopyClass(FoundPackage, ClassName);
+		if (!CustomClass) return false;
+	}
+	FUObjectItem* ClassInternalItem = CustomClass->GetObjectItem();
+	ClassInternalItem->SetGCKeep();
+	ClassInternalItem->SetRootSet();
 
 	if (!FHandleCharacterDied) {
-		FHandleCharacterDied = CopyFunction(UCustom, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+		FHandleCharacterDied = CopyFunction(CustomClass, ClassName, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
 		if (!FHandleCharacterDied) return false;
 		FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
 	}
 
 	if (!FHandleActorDestroyed) {
-		FHandleActorDestroyed = CopyFunction(UCustom, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
+		FHandleActorDestroyed = CopyFunction(CustomClass, ClassName, STR("HandleActorDestroyed"), STR("/Script/Engine.ActorDestroyedSignature__DelegateSignature"));
 		if (!FHandleActorDestroyed) return false;
 		FHandleActorDestroyed->SetFuncPtr(&ActorDestroyedCollector);
 	}
 
-	// Нет смысла делать safechecks тут, похуй лучше краш чем хуй пойми что
 	if (!CallBackSucker) {
 		CallBackSucker = UObjectGlobals::StaticFindObject<UObject*>(nullptr, nullptr, STR("/Script/TheIsle.ModDelegateProxy"));
 		if (!CallBackSucker) {
-			FStaticConstructObjectParameters UObjectParams{UCustom, FoundPackage};
+			FStaticConstructObjectParameters UObjectParams{CustomClass, FoundPackage};
+			UObjectParams.SetFlags = RF_MarkAsRootSet;
 			UObjectParams.Name = FName(STR("ModDelegateProxy"), FNAME_Add);
 			CallBackSucker = UObjectGlobals::StaticConstructObject(UObjectParams);
 			if (!CallBackSucker) return false;
 		}
+		FUObjectItem* InternalItem = CallBackSucker->GetObjectItem();
+		InternalItem->SetGCKeep();
+		InternalItem->SetRootSet();
 	}
 
 	return true;
@@ -159,14 +170,14 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 }
 
 CallsHandler::~CallsHandler() {
-	UObjectGlobals::UnregisterHook(OnPlayerRespawned, OnPlayerRespawnedIDs);
+	if (OnPlayerRespawned) UObjectGlobals::UnregisterHook(OnPlayerRespawned, OnPlayerRespawnedIDs);
 	LookUp = nullptr;
 }
 
 
 void CallsHandler::HandleActorDestroyed(UObject* Context, FFrame& Stack) {
 #ifdef LOCAL_DEBUGGING
-	RC::Output::send<RC::LogLevel::Verbose>(STR("Noob destroyed"));
+	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino GC'ed"));
 #endif
 	ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 	Ticker->Dinosaurs.Remove(Dinosaur);
@@ -175,7 +186,7 @@ void CallsHandler::HandleActorDestroyed(UObject* Context, FFrame& Stack) {
 
 void CallsHandler::HandleCharacterDied(UObject* Context, FFrame& Stack) {
 #ifdef LOCAL_DEBUGGING
-	RC::Output::send<RC::LogLevel::Verbose>(STR("Noob died"));
+	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino died"));
 #endif
 	ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 	Ticker->Dinosaurs.Remove(Dinosaur);
@@ -188,7 +199,7 @@ void CallsHandler::PreCharacterSpawn(UnrealScriptFunctionCallableContext& contex
 
 void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& context) {
 #ifdef LOCAL_DEBUGGING
-	RC::Output::send<RC::LogLevel::Verbose>(STR("Noob spawned"));
+	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino spawned"));
 #endif
 	APlayerController* Controller = *reinterpret_cast<APlayerController**>(context.TheStack.Locals());
 	APawn* Pawn = Controller->Pawn();
@@ -200,16 +211,16 @@ void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& conte
 	Ticker->Dinosaurs.Add(Dinosaur);
 
 	// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю
-	FMulticastDelegateProperty* POnCharacterDied = static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find)));
+	FMulticastInlineDelegateProperty* POnCharacterDied = static_cast<FMulticastInlineDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find)));
 	BindingManager.Bind(
 		POnCharacterDied, POnCharacterDied->ContainerPtrToValuePtr<void>(Dinosaur),
 		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
 	);
 
 	// Ересь с регистрацией хуеты что имеет глобальное хранилище, я ебал его в рот...
-	// FMulticastDelegateProperty* POnDestroyed = static_cast<FMulticastDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
-	// BindingManager.Bind(
-	// 	POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
-	// 	Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
-	// );
+	FMulticastSparseDelegateProperty* POnDestroyed = static_cast<FMulticastSparseDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
+	BindingManager.Bind(
+		POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
+		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
+	);
 }

@@ -16,6 +16,9 @@ StatisticSystem::StatisticSystem() {
 }
 
 StatisticSystem::~StatisticSystem() {
+	delete Database;
+	delete TickingStatistic;
+	delete Callbacks;
 }
 
 
