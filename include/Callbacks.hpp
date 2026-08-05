@@ -12,18 +12,18 @@ class CallsHandler {
 private:
 	UClass* CustomClass{};
 	UObject* CallBackSucker{};
-	DelegateManager BindingManager{};
+	std::unique_ptr<DelegateManager> BindingManager{};
 	UFunction* FHandleCharacterDeath{};
 	UFunction* FHandleActorDestroyed{};
 
 	// Калбэк инициализации к моменту создания BP хуйни.
 	bool CreateHelpers();
 	UFunction* OnPlayerRespawned{};
-	std::pair<int, int> OnPlayerRespawnedIDs{};
+	std::pair<int, int> OnPlayerRespawnedIDs;
 
-	StatisticSubsystem* Ticker{};
-	RC::DataBase::DataBase* Database{};
-	Hook::GlobalCallbackId InitializeCallBackID{};
+	StatisticSubsystem* Ticker;
+	RC::DataBase::DataBase* Database;
+	Hook::GlobalCallbackId InitializeCallBackID;
 
 public:
     CallsHandler(RC::DataBase::DataBase* Database, StatisticSubsystem* Ticker);

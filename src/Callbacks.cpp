@@ -9,7 +9,6 @@
 #include <TheIsle/APlayerController.hpp>
 #include <Callbacks.hpp>
 #include <cstddef>
-#define LOCAL_DEBUGGING
 
 
 UClass* CopyClass(UPackage* Package, const RC::StringType ClassName) {
@@ -87,7 +86,7 @@ void CharacterDiedCollector(UObject* Context, FFrame& Stack, void* Result) {
 
 bool CallsHandler::CreateHelpers() {
 	static int TicksFired = 0;
-	static constexpr int TickRate{300};
+	static constexpr int TickRate{150};
 
 	if (++TicksFired < TickRate) return false;
 	TicksFired = 0;
@@ -175,18 +174,20 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 CallsHandler::~CallsHandler() {
 	if (OnPlayerRespawned) UObjectGlobals::UnregisterHook(OnPlayerRespawned, OnPlayerRespawnedIDs);
 	if (InitializeCallBackID) Hook::UnregisterCallback(InitializeCallBackID);
+	// Нам не обязательно это делать, но ради безопасности!
+	if (FHandleCharacterDeath) FHandleCharacterDeath->SetFuncPtr(&CallbacksSinkHole);
+	if (FHandleActorDestroyed) FHandleActorDestroyed->SetFuncPtr(&CallbacksSinkHole);
 	LookUp = nullptr;
 }
 
 
-// В реали я хз, калбэк не ставится на эту хуету, т.к. там спарс хуета
 void CallsHandler::HandleActorDestroyed(UObject* Context, FFrame& Stack) {
 #ifdef LOCAL_DEBUGGING
 	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino GC'ed"));
 #endif
 	ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 	Ticker->Dinosaurs.Remove(Dinosaur);
-	BindingManager.UnBindContainer(Dinosaur);
+	BindingManager->UnBindContainer(Dinosaur);
 }
 
 void CallsHandler::HandleCharacterDied(UObject* Context, FFrame& Stack) {
@@ -195,7 +196,7 @@ void CallsHandler::HandleCharacterDied(UObject* Context, FFrame& Stack) {
 #endif
 	ATIDinosaurBase* Dinosaur = *reinterpret_cast<ATIDinosaurBase**>(Stack.Locals());
 	Ticker->Dinosaurs.Remove(Dinosaur);
-	BindingManager.UnBindContainer(Dinosaur);
+	BindingManager->UnBindContainer(Dinosaur);
 	Database->SaveDino(Dinosaur, false, true);
 }
 
@@ -217,15 +218,15 @@ void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& conte
 
 	// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю
 	FMulticastInlineDelegateProperty* POnCharacterDied = static_cast<FMulticastInlineDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find)));
-	BindingManager.Bind(
+	BindingManager->Bind(
 		POnCharacterDied, POnCharacterDied->ContainerPtrToValuePtr<void>(Dinosaur),
 		Dinosaur, CallBackSucker, FHandleCharacterDeath->GetFName()
 	);
 
-	// Ересь которая нихуя не регает, пиздец, ебаный спарс!
+	// Ересь
 	FMulticastSparseDelegateProperty* POnDestroyed = static_cast<FMulticastSparseDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
-	BindingManager.Bind(
+	BindingManager->Bind(
 		POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
-		Dinosaur, CallBackSucker, FHandleCharacterDeath->GetFName()
+		Dinosaur, CallBackSucker, FHandleActorDestroyed->GetFName()
 	);
 }

@@ -14,12 +14,12 @@ struct StatisticConfig {
 
 class StatisticSystem : public RC::CppUserModBase {
 private:
-	StatisticConfig Config{};
-	std::unique_ptr<RC::DataBase::DataBase> Database{};
+	StatisticConfig Config;
+	std::unique_ptr<RC::DataBase::DataBase> Database;
 
 public:
-	std::unique_ptr<StatisticSubsystem> TickingStatistic{};
-	std::unique_ptr<CallsHandler> Callbacks{};
+	std::unique_ptr<StatisticSubsystem> TickingStatistic;
+	std::unique_ptr<CallsHandler> Callbacks;
 
     StatisticSystem();
 	~StatisticSystem() override;
