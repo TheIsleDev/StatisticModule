@@ -124,10 +124,10 @@ bool CallsHandler::CreateHelpers() {
 	ClassInternalItem->SetGCKeep();
 	ClassInternalItem->SetRootSet();
 
-	if (!FHandleCharacterDied) {
-		FHandleCharacterDied = CopyFunction(CustomClass, ClassName, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
-		if (!FHandleCharacterDied) return false;
-		FHandleCharacterDied->SetFuncPtr(&CharacterDiedCollector);
+	if (!FHandleCharacterDeath) {
+		FHandleCharacterDeath = CopyFunction(CustomClass, ClassName, STR("HandleCharacterDeath"), STR("/Script/TheIsle.CharacterDiedDelegate__DelegateSignature"));
+		if (!FHandleCharacterDeath) return false;
+		FHandleCharacterDeath->SetFuncPtr(&CharacterDiedCollector);
 	}
 
 	if (!FHandleActorDestroyed) {
@@ -161,10 +161,11 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 	LookUp = this;
 
 	// Ну хз даже как засейвится до генерации BP...
-	Hook::RegisterEngineTickPreCallback(
+	InitializeCallBackID = Hook::RegisterEngineTickPreCallback(
 		[this](Hook::TCallbackIterationData<void>& info, UEngine* Context, float DeltaSeconds, bool bIdleMode) {
 			if (!CreateHelpers()) return;
 
+			InitializeCallBackID = 0;
 			info.RemoveSelf();
 		}
 		, {false, true, STR("Statistic"), STR("CallbacksInitialize")}
@@ -173,10 +174,12 @@ CallsHandler::CallsHandler(RC::DataBase::DataBase* DBLink, StatisticSubsystem* T
 
 CallsHandler::~CallsHandler() {
 	if (OnPlayerRespawned) UObjectGlobals::UnregisterHook(OnPlayerRespawned, OnPlayerRespawnedIDs);
+	if (InitializeCallBackID) Hook::UnregisterCallback(InitializeCallBackID);
 	LookUp = nullptr;
 }
 
 
+// В реали я хз, калбэк не ставится на эту хуету, т.к. там спарс хуета
 void CallsHandler::HandleActorDestroyed(UObject* Context, FFrame& Stack) {
 #ifdef LOCAL_DEBUGGING
 	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino GC'ed"));
@@ -200,9 +203,6 @@ void CallsHandler::HandleCharacterDied(UObject* Context, FFrame& Stack) {
 void CallsHandler::PreCharacterSpawn(UnrealScriptFunctionCallableContext& context) {}
 
 void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& context) {
-#ifdef LOCAL_DEBUGGING
-	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino spawned"));
-#endif
 	APlayerController* Controller = *reinterpret_cast<APlayerController**>(context.TheStack.Locals());
 	APawn* Pawn = Controller->Pawn();
 	if (!Pawn || !Pawn->IsA(ATIDinosaurBase::StaticClass())) return;
@@ -210,19 +210,22 @@ void CallsHandler::PostCharacterSpawn(UnrealScriptFunctionCallableContext& conte
 	ATIDinosaurBase* Dinosaur = static_cast<ATIDinosaurBase*>(Pawn);
 	if (Ticker->Dinosaurs.Contains(Dinosaur)) return;// Режим спектатора тоже тригерит это, как и перезаход после hard выхода с сервера
 
+#ifdef LOCAL_DEBUGGING
+	RC::Output::send<RC::LogLevel::Verbose>(STR("Dino spawned"));
+#endif
 	Ticker->Dinosaurs.Add(Dinosaur);
 
 	// Ересь с биндами через проперти и надежда в Аллаха! Это даже близко не UE stype game dev, но я что-то обязательно придумаю
 	FMulticastInlineDelegateProperty* POnCharacterDied = static_cast<FMulticastInlineDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnCharacterDied"), FNAME_Find)));
 	BindingManager.Bind(
 		POnCharacterDied, POnCharacterDied->ContainerPtrToValuePtr<void>(Dinosaur),
-		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
+		Dinosaur, CallBackSucker, FHandleCharacterDeath->GetFName()
 	);
 
-	// Ересь с регистрацией хуеты что имеет глобальное хранилище, я ебал его в рот...
+	// Ересь которая нихуя не регает, пиздец, ебаный спарс!
 	FMulticastSparseDelegateProperty* POnDestroyed = static_cast<FMulticastSparseDelegateProperty*>(Dinosaur->StaticClass()->FindProperty(FName(STR("OnDestroyed"), FNAME_Find)));
 	BindingManager.Bind(
 		POnDestroyed, POnDestroyed->ContainerPtrToValuePtr<void>(Dinosaur),
-		Dinosaur, CallBackSucker, FHandleCharacterDied->GetFName()
+		Dinosaur, CallBackSucker, FHandleCharacterDeath->GetFName()
 	);
 }

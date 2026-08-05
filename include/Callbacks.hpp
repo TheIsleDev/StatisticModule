@@ -13,7 +13,7 @@ private:
 	UClass* CustomClass{};
 	UObject* CallBackSucker{};
 	DelegateManager BindingManager{};
-	UFunction* FHandleCharacterDied{};
+	UFunction* FHandleCharacterDeath{};
 	UFunction* FHandleActorDestroyed{};
 
 	// Калбэк инициализации к моменту создания BP хуйни.
@@ -23,6 +23,7 @@ private:
 
 	StatisticSubsystem* Ticker{};
 	RC::DataBase::DataBase* Database{};
+	Hook::GlobalCallbackId InitializeCallBackID{};
 
 public:
     CallsHandler(RC::DataBase::DataBase* Database, StatisticSubsystem* Ticker);

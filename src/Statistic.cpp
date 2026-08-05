@@ -16,20 +16,14 @@ StatisticSystem::StatisticSystem() {
 }
 
 StatisticSystem::~StatisticSystem() {
-	delete Database;
-	delete TickingStatistic;
-	delete Callbacks;
 }
 
 
 void StatisticSystem::on_unreal_init() {
-	static RC::DataBase::DataBase DatabaseLink{Config.Database};
-	DatabaseLink.PrepareStatistic();
-	Database = &DatabaseLink;
-	static StatisticSubsystem Ticker{Database};
-	TickingStatistic = &Ticker;
-	static CallsHandler Calls{Database, TickingStatistic};
-	Callbacks = &Calls;
+	Database = std::make_unique<RC::DataBase::DataBase>(Config.Database);
+	Database->PrepareStatistic();
+	TickingStatistic = std::make_unique<StatisticSubsystem>(Database.get());
+	Callbacks = std::make_unique<CallsHandler>(Database.get(), TickingStatistic.get());
 }
 
 
